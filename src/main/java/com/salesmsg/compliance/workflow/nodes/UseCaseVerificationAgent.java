@@ -1,11 +1,12 @@
 package com.salesmsg.compliance.workflow.nodes;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salesmsg.compliance.model.ComplianceSubmission;
 import com.salesmsg.compliance.repository.ComplianceSubmissionRepository;
 import com.salesmsg.compliance.service.KendraService;
-import com.salesmsg.compliance.service.UseCaseValidationService;
 import com.salesmsg.compliance.workflow.VerificationOrchestrator;
-import dev.langchain4j.model.chat.ChatLanguageModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -14,17 +15,15 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * LangGraph node for validating the use case description in a 10DLC submission.
- * Uses a combination of RAG (with Kendra) and LLM (with Claude model) to evaluate
+ * Uses a combination of RAG (with Kendra) and LLM to evaluate
  * the use case against compliance requirements.
  */
 @Component
@@ -34,21 +33,20 @@ public class UseCaseVerificationAgent {
 
     private final ComplianceSubmissionRepository submissionRepository;
     private final VerificationOrchestrator verificationOrchestrator;
-    private final UseCaseValidationService useCaseValidationService;
     private final KendraService kendraService;
-    private final ChatClient springAiChatClient;
-    private final ChatLanguageModel langChainModel;
+    private final ChatClient chatClient;
+    private final ObjectMapper objectMapper;
 
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             You are a Use Case Verification Expert for 10DLC SMS campaigns. Your task is to evaluate
             if the provided use case description is compliant with carrier requirements and guidelines.
             
-            Business Name: {{businessName}}
-            Business Type: {{businessType}}
-            Use Case Description: {{useCase}}
+            Business Name: %s
+            Business Type: %s
+            Use Case Description: %s
             
             Carrier Guidelines:
-            {{guidelines}}
+            %s
             
             Instructions:
             1. Analyze if the use case is clear about the purpose of SMS messaging
@@ -79,7 +77,6 @@ public class UseCaseVerificationAgent {
             }
             """;
 
-
     public Map<String, Object> process(Map<String, Object> state) {
         String verificationId = (String) state.get("verification_id");
         String submissionId = (String) state.get("submission_id");
@@ -97,25 +94,26 @@ public class UseCaseVerificationAgent {
             // Retrieve carrier guidelines using Kendra RAG
             String guidelines = kendraService.retrieveCarrierGuidelines(submission.getBusinessType());
 
-            // Build the prompt with business and use case context
-            Map<String, Object> promptParams = new HashMap<>();
-            promptParams.put("businessName", submission.getBusinessName());
-            promptParams.put("businessType", submission.getBusinessType());
-            promptParams.put("useCase", submission.getUseCase());
-            promptParams.put("guidelines", guidelines);
-
-            // Create the system prompt
-            Message systemMessage = new SystemPromptTemplate(SYSTEM_PROMPT_TEMPLATE)
-                    .createMessage(promptParams);
+            // Build the system prompt with business and use case context
+            String systemPrompt = String.format(
+                    SYSTEM_PROMPT_TEMPLATE,
+                    submission.getBusinessName(),
+                    submission.getBusinessType(),
+                    submission.getUseCase(),
+                    guidelines
+            );
 
             // Create the user message
-            UserMessage userMessage = new UserMessage("Please analyze this use case for 10DLC compliance.");
+            String userPrompt = "Please analyze this use case for 10DLC compliance.";
 
-            // Execute Spring AI chat completion
-            Prompt prompt = new Prompt(List.of(systemMessage, userMessage));
+            // Create the prompt
+            List<Message> promptMessages = new ArrayList<>();
+            promptMessages.add(new SystemMessage(systemPrompt));
+            promptMessages.add(new UserMessage(userPrompt));
+            Prompt prompt = new Prompt(promptMessages);
 
-
-            ChatResponse response = springAiChatClient
+            // Execute the chat completion
+            ChatResponse response = chatClient
                     .prompt(prompt)
                     .call()
                     .chatResponse();
@@ -123,7 +121,7 @@ public class UseCaseVerificationAgent {
             String responseText = response.getResult().getOutput().getText();
 
             // Parse the response
-            Map<String, Object> analysisResult = useCaseValidationService.parseAnalysisResult(responseText);
+            Map<String, Object> analysisResult = parseAnalysisResult(responseText);
 
             // Extract data
             boolean isCompliant = (boolean) analysisResult.getOrDefault("is_compliant", false);
@@ -187,5 +185,58 @@ public class UseCaseVerificationAgent {
             log.error("Error during use case verification for submission: {}", submissionId, e);
             throw new RuntimeException("Use case verification failed", e);
         }
+    }
+
+    /**
+     * Parse the analysis result from the AI model response.
+     *
+     * @param responseText The text response from the AI model
+     * @return A map containing the parsed analysis result
+     */
+    private Map<String, Object> parseAnalysisResult(String responseText) {
+        try {
+            // Extract JSON from response (in case there's additional text around it)
+            String jsonContent = extractJsonFromResponse(responseText);
+
+            // Parse the JSON
+            return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
+
+        } catch (JsonProcessingException e) {
+            log.error("Error parsing use case analysis result", e);
+            return Map.of(
+                    "is_compliant", false,
+                    "score", 0,
+                    "issues", List.of(Map.of(
+                            "severity", "critical",
+                            "description", "Error analyzing use case: " + e.getMessage(),
+                            "recommendation", "Please try again or contact support"
+                    )),
+                    "recommendations", List.of(Map.of(
+                            "priority", "high",
+                            "description", "Unable to analyze use case",
+                            "action", "Please verify the use case text and try again"
+                    )),
+                    "reasoning", "Error during analysis"
+            );
+        }
+    }
+
+    /**
+     * Extract JSON content from a text response that might contain additional text.
+     *
+     * @param response The response text that should contain a JSON object
+     * @return The extracted JSON string
+     */
+    private String extractJsonFromResponse(String response) {
+        // Look for JSON pattern using regex
+        Pattern pattern = Pattern.compile("\\{[\\s\\S]*\\}");
+        Matcher matcher = pattern.matcher(response);
+
+        if (matcher.find()) {
+            return matcher.group();
+        }
+
+        // If no JSON found, return the original response
+        return response;
     }
 }

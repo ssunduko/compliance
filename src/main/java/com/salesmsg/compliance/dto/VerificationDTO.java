@@ -28,6 +28,7 @@ public class VerificationDTO {
     private LocalDateTime estimatedCompletionTime;
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;
+    private ErrorInfo error;
 
     /**
      * Error information if verification failed.

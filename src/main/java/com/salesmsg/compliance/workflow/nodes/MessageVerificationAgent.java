@@ -1,10 +1,12 @@
 package com.salesmsg.compliance.workflow.nodes;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salesmsg.compliance.model.ComplianceSubmission;
 import com.salesmsg.compliance.model.SubmissionMessage;
 import com.salesmsg.compliance.repository.ComplianceSubmissionRepository;
 import com.salesmsg.compliance.repository.SubmissionMessageRepository;
-import com.salesmsg.compliance.service.MessageValidationService;
 import com.salesmsg.compliance.workflow.VerificationOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +19,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -31,8 +35,8 @@ public class MessageVerificationAgent {
     private final ComplianceSubmissionRepository submissionRepository;
     private final SubmissionMessageRepository messageRepository;
     private final VerificationOrchestrator verificationOrchestrator;
-    private final MessageValidationService messageValidationService;
     private final ChatClient chatClient;
+    private final ObjectMapper objectMapper;
 
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             You are an SMS Message Compliance Expert for 10DLC campaigns. Your task is to evaluate
@@ -45,10 +49,11 @@ public class MessageVerificationAgent {
             1. Proper identification of the business/sender
             2. Clear opt-out instructions (STOP keyword)
             3. No prohibited content (gambling, adult content, etc.)
-            4. Appropriate message length
+            4. Appropriate message length (message parts should be 160 characters or fewer)
             5. No excessive use of capital letters, exclamation points, or URLs
             6. No misleading or deceptive content
             7. Alignment with the stated use case
+            8. Proper inclusion of phone numbers and links if specified
             
             Provide your analysis in JSON format with the following structure:
             {
@@ -64,7 +69,7 @@ public class MessageVerificationAgent {
                   "issues": [
                     {
                       "severity": "critical" | "major" | "minor",
-                      "description": "string"
+                      "description": string
                     }
                   ],
                   "suggested_revision": string
@@ -152,7 +157,7 @@ public class MessageVerificationAgent {
             String responseText = response.getResult().getOutput().getText();
 
             // Parse the response
-            Map<String, Object> analysisResult = messageValidationService.parseMessageAnalysisResult(responseText);
+            Map<String, Object> analysisResult = parseMessageAnalysisResult(responseText);
 
             // Extract data
             boolean overallCompliant = (boolean) analysisResult.getOrDefault("overall_compliant", false);
@@ -227,6 +232,50 @@ public class MessageVerificationAgent {
     }
 
     /**
+     * Parse the JSON analysis result from the AI model response.
+     *
+     * @param responseText The text response from the AI model
+     * @return A map containing the parsed analysis result
+     */
+    private Map<String, Object> parseMessageAnalysisResult(String responseText) {
+        try {
+            // Extract JSON from response (in case there's additional text around it)
+            String jsonContent = extractJsonFromResponse(responseText);
+
+            // Parse the JSON
+            return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
+
+        } catch (JsonProcessingException e) {
+            log.error("Error parsing message analysis result", e);
+            return Map.of(
+                    "overall_compliant", false,
+                    "overall_score", 0,
+                    "message_results", List.of(),
+                    "recommendations", List.of("Error analyzing messages: " + e.getMessage())
+            );
+        }
+    }
+
+    /**
+     * Extract JSON content from a text response that might contain additional text.
+     *
+     * @param response The response text that should contain a JSON object
+     * @return The extracted JSON string
+     */
+    private String extractJsonFromResponse(String response) {
+        // Look for JSON pattern using regex
+        Pattern pattern = Pattern.compile("\\{[\\s\\S]*\\}");
+        Matcher matcher = pattern.matcher(response);
+
+        if (matcher.find()) {
+            return matcher.group();
+        }
+
+        // If no JSON found, return the original response
+        return response;
+    }
+
+    /**
      * Update the message records in the database with the analysis results.
      *
      * @param messages The list of message entities
@@ -234,7 +283,7 @@ public class MessageVerificationAgent {
      */
     private void updateMessageRecords(List<SubmissionMessage> messages, List<Map<String, Object>> messageResults) {
         for (Map<String, Object> result : messageResults) {
-            int index = ((Number) result.get("message_index")).intValue() - 1;
+            int index = ((Number) result.getOrDefault("message_index", 0)).intValue() - 1;
 
             if (index < 0 || index >= messages.size()) {
                 log.warn("Invalid message index: {}, messages size: {}", index, messages.size());
@@ -243,17 +292,17 @@ public class MessageVerificationAgent {
 
             SubmissionMessage message = messages.get(index);
 
-            message.setCompliant((Boolean) result.get("compliant"));
-            message.setMatchesUseCase((Boolean) result.get("matches_use_case"));
-            message.setHasRequiredElements((Boolean) result.get("has_required_elements"));
+            message.setCompliant((Boolean) result.getOrDefault("compliant", false));
+            message.setMatchesUseCase((Boolean) result.getOrDefault("matches_use_case", false));
+            message.setHasRequiredElements((Boolean) result.getOrDefault("has_required_elements", false));
 
             @SuppressWarnings("unchecked")
             List<String> missingElements = (List<String>) result.get("missing_elements");
             message.setMissingElements(missingElements != null ? String.join(", ", missingElements) : null);
 
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> issues = (List<Map<String, Object>>) result.get("issues");
-            if (issues != null && !issues.isEmpty()) {
+            List<Map<String, Object>> issues = (List<Map<String, Object>>) result.getOrDefault("issues", List.of());
+            if (!issues.isEmpty()) {
                 List<String> issueDescriptions = issues.stream()
                         .map(issue -> issue.get("severity") + ": " + issue.get("description"))
                         .collect(Collectors.toList());
