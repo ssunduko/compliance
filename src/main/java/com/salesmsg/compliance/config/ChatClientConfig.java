@@ -1,40 +1,80 @@
 package com.salesmsg.compliance.config;
 
 
-import org.springframework.ai.bedrock.api.BedrockApi;
-import org.springframework.ai.bedrock.claude.BedrockClaude3ChatClient;
+import io.micrometer.observation.ObservationRegistry;
+import org.springframework.ai.bedrock.converse.BedrockProxyChatModel;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.model.function.DefaultFunctionCallbackResolver;
+import org.springframework.ai.model.function.FunctionCallback;
+import org.springframework.ai.model.function.FunctionCallbackResolver;
+import org.springframework.ai.model.function.FunctionCallingOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
+import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 
-/**
- * Configuration for Spring AI Chat Client.
- * Creates and configures the ChatClient bean used by various services.
- */
+import java.util.ArrayList;
+import java.util.List;
+
 @Configuration
 public class ChatClientConfig {
 
-    @Value("${spring.ai.bedrock.chat-model}")
-    private String chatModel;
+    @Value("${aws.region}")
+    private String awsRegion;
 
-    @Value("${ai.model.temperature}")
-    private float temperature;
+    @Value("${aws.access-key}")
+    private String accessKey;
 
-    @Value("${ai.model.max-tokens}")
-    private int maxTokens;
+    @Value("${aws.secret-key}")
+    private String secretKey;
 
-    /**
-     * Creates a ChatClient bean using Amazon Bedrock's Claude model.
-     *
-     * @param bedrockApi The Bedrock API client
-     * @return The configured ChatClient
-     */
+    @Value("${anthropic.model-id:anthropic.claude-3-5-sonnet-20240620-v1:0}")
+    private String modelId;
+
+    @Value("${anthropic.temperature:0.7}")
+    private Float temperature;
+
+    @Value("${anthropic.max-tokens:1000}")
+    private Integer maxTokens;
+
     @Bean
-    public ChatClient chatClient(BedrockApi bedrockApi) {
-        return new BedrockClaude3ChatClient(bedrockApi)
-                .withModel(chatModel)
-                .withTemperature(temperature)
-                .withMaxTokens(maxTokens);
+    public BedrockProxyChatModel bedrockConverseProxyChatModel(BedrockRuntimeClient bedrockRuntimeClient) {
+        BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient = BedrockRuntimeAsyncClient.builder()
+                .region(Region.of(awsRegion))
+                .credentialsProvider(
+                        StaticCredentialsProvider.create(
+                                AwsBasicCredentials.create(accessKey, secretKey)
+                        )
+                )
+                .build();
+
+        FunctionCallingOptions defaultOptions = FunctionCallingOptions.builder()
+                .model(modelId)
+                .temperature(0.7)
+                .maxTokens(1000)
+                .build();
+
+        FunctionCallbackResolver functionCallbackResolver = new DefaultFunctionCallbackResolver();
+
+        List<FunctionCallback> toolFunctionCallbacks = new ArrayList<>();
+        ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
+
+        return new BedrockProxyChatModel(
+                bedrockRuntimeClient,
+                bedrockRuntimeAsyncClient,
+                defaultOptions,
+                functionCallbackResolver,
+                toolFunctionCallbacks,
+                observationRegistry
+        );
+    }
+
+    @Bean
+    public ChatClient chatClient(BedrockProxyChatModel chatModel) {
+        return ChatClient.builder(chatModel).build();
     }
 }

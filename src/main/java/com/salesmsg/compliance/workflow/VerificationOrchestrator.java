@@ -6,7 +6,6 @@ import com.salesmsg.compliance.model.Verification;
 import com.salesmsg.compliance.repository.ComplianceReportRepository;
 import com.salesmsg.compliance.repository.ComplianceSubmissionRepository;
 import com.salesmsg.compliance.repository.VerificationRepository;
-import dev.langchain4j.langgraph4j.executor.GraphExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +26,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class VerificationOrchestrator {
 
-    private final GraphExecutor<Map<String, Object>> verificationWorkflowExecutor;
     private final Map<String, Object> initialVerificationState;
     private final ComplianceSubmissionRepository submissionRepository;
     private final VerificationRepository verificationRepository;
@@ -65,7 +63,8 @@ public class VerificationOrchestrator {
         submissionRepository.save(submission);
 
         // Start the verification process asynchronously
-        CompletableFuture.runAsync(() -> executeVerificationWorkflow(verification, submission));
+        Verification finalVerification = verification;
+        CompletableFuture.runAsync(() -> executeVerificationWorkflow(finalVerification, submission));
 
         return verification;
     }
@@ -94,7 +93,9 @@ public class VerificationOrchestrator {
             inputState.put("opt_in_method", submission.getOptInMethod());
 
             // Execute the workflow (this will run through all steps in the graph)
-            Map<String, Object> result = verificationWorkflowExecutor.execute(inputState);
+            //Map<String, Object> result = verificationWorkflowExecutor.execute(inputState);
+
+            Map<String, Object> result = null;
 
             // Process successful result
             processWorkflowResult(verificationId, result);

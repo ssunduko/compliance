@@ -32,7 +32,6 @@ public class MessageValidationService {
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
 
-
     private static final String MESSAGE_VALIDATION_PROMPT = """
             You are an SMS Message Compliance Expert for 10DLC campaigns. Your task is to evaluate
             if the provided sample messages comply with carrier requirements and SMS best practices.
