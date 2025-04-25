@@ -25,7 +25,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class VerificationOrchestratorIntegrationTest {
+public class VerificationOrchestratorMockTest {
 
     private VerificationOrchestrator verificationOrchestrator;
 
@@ -99,13 +99,12 @@ public class VerificationOrchestratorIntegrationTest {
                 .currentStep("planning")
                 .estimatedCompletionTime(LocalDateTime.now().plusMinutes(15))
                 .build();
-
-        // CRITICAL: Disable the asynchronous execution to keep test simple
-        doNothing().when(verificationOrchestrator).executeVerificationWorkflow(any(), any());
     }
 
     @Test
     void testStartVerification() {
+        doNothing().when(verificationOrchestrator).executeVerificationWorkflow(any(), any());
+
         // Configure repository mocks for this test only
         when(submissionRepository.findById(testSubmissionId)).thenReturn(Optional.of(testSubmission));
         when(verificationRepository.save(any(Verification.class))).thenReturn(testVerification);
