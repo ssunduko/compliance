@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -27,9 +26,6 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(classes = ComplianceApplication.class)
 @ActiveProfiles("test")
 public class VerificationOrchestratorLiveTest {
-
-    @Mock
-    private ChatClient chatClient;
 
     @Mock
     private ComplianceSubmissionRepository submissionRepository;

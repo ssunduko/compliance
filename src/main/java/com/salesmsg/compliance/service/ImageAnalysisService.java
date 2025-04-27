@@ -81,7 +81,10 @@ public class ImageAnalysisService {
         try {
             // Upload image to S3 to get a URL
             String imageKey = "temp/analysis/" + UUID.randomUUID() + getFileExtension(image.getOriginalFilename());
-            String imageUrl = awsService.uploadFile(image, imageKey);
+            //TODO: Upload image
+            //String imageUrl = awsService.uploadFile(image, imageKey);
+
+            String imageUrl = "https://se498.s3.us-west-2.amazonaws.com/form.png";
 
             // Format the system prompt with request parameters
             String systemPrompt = String.format(
@@ -101,7 +104,6 @@ public class ImageAnalysisService {
             Prompt prompt = new Prompt(promptMessages);
 
             // Execute the chat completion
-            // Execute the chat completion
             ChatResponse response = chatClient
                     .prompt(prompt)
                     .call()
@@ -110,7 +112,8 @@ public class ImageAnalysisService {
             String responseText = response.getResult().getOutput().getText();
 
             // Delete the temporary image from S3
-            awsService.deleteFile(imageKey);
+            //TODO: Delete Image
+            //awsService.deleteFile(imageKey);
 
             // Parse the JSON response
             Map<String, Object> analysisResult = parseJsonResponse(responseText);

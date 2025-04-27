@@ -39,6 +39,7 @@ public class AWSService {
      * @return The URL of the uploaded file
      */
     public String uploadFile(MultipartFile file, String key) {
+
         try {
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucketName)

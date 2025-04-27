@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Service for generating compliant content using AI.
@@ -252,40 +251,165 @@ public class ContentGenerationService {
 
     /**
      * Parse a JSON response from the AI model.
+     * Uses a stack-safe approach for extracting and handling JSON.
      *
      * @param responseText The response text
      * @return The parsed JSON as a Map
      */
     private Map<String, Object> parseJsonResponse(String responseText) {
         try {
-            // Extract JSON from response (in case there's additional text around it)
+            // Extract JSON from response using a stack-safe method
             String jsonContent = extractJsonFromResponse(responseText);
+
+            // Pre-process the JSON to handle unescaped newlines within string values
+            jsonContent = sanitizeJsonForParsing(jsonContent);
 
             // Parse the JSON
             return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
 
         } catch (JsonProcessingException e) {
-            log.error("Error parsing AI response", e);
-            return Map.of();
+            log.error("Error parsing AI response: {}", e.getMessage());
+            log.debug("Original response text: {}", responseText);
+            return new HashMap<>();
         }
     }
 
     /**
      * Extract JSON content from a text response that might contain additional text.
+     * Uses a stack-safe bracket counting approach instead of regex.
      *
      * @param response The response text that should contain a JSON object
      * @return The extracted JSON string
      */
     private String extractJsonFromResponse(String response) {
-        // Look for JSON pattern using regex
-        Pattern pattern = Pattern.compile("\\{[\\s\\S]*\\}");
-        Matcher matcher = pattern.matcher(response);
-
-        if (matcher.find()) {
-            return matcher.group();
+        if (response == null || response.isEmpty()) {
+            return "{}";
         }
 
-        // If no JSON found, return the original response
-        return response;
+        // Find the first opening brace
+        int startBrace = response.indexOf('{');
+        if (startBrace == -1) {
+            return "{}"; // No JSON object found
+        }
+
+        // Track opening and closing braces to find the matching end
+        int braceCount = 1;
+        int endBrace = -1;
+
+        for (int i = startBrace + 1; i < response.length(); i++) {
+            char c = response.charAt(i);
+
+            // Skip escaped characters
+            if (c == '\\' && i + 1 < response.length()) {
+                i++;
+                continue;
+            }
+
+            // Skip string literals
+            if (c == '"') {
+                i++;
+                while (i < response.length()) {
+                    char stringChar = response.charAt(i);
+                    if (stringChar == '\\' && i + 1 < response.length()) {
+                        i += 2; // Skip escaped character in string
+                        continue;
+                    }
+                    if (stringChar == '"') {
+                        break; // End of string
+                    }
+                    i++;
+                }
+                continue;
+            }
+
+            // Count braces
+            if (c == '{') {
+                braceCount++;
+            } else if (c == '}') {
+                braceCount--;
+                if (braceCount == 0) {
+                    endBrace = i;
+                    break;
+                }
+            }
+        }
+
+        if (endBrace != -1) {
+            return response.substring(startBrace, endBrace + 1);
+        }
+
+        // No valid JSON structure found, return a minimal valid object
+        return "{}";
+    }
+
+    /**
+     * Sanitizes JSON content by properly escaping newlines and other control characters
+     * within string values.
+     *
+     * @param json The raw JSON string that might contain unescaped newlines
+     * @return Properly escaped JSON string ready for parsing
+     */
+    private String sanitizeJsonForParsing(String json) {
+        if (json == null || json.isEmpty()) {
+            return "{}";
+        }
+
+        StringBuilder result = new StringBuilder(json.length() + 100); // Add some padding for potential escapes
+        boolean inString = false;
+        boolean escapeNext = false;
+
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+
+            if (escapeNext) {
+                // This character is already escaped
+                result.append(c);
+                escapeNext = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                // Start of escape sequence
+                result.append(c);
+                escapeNext = true;
+                continue;
+            }
+
+            if (c == '"' && !escapeNext) {
+                // Toggle string context
+                inString = !inString;
+                result.append(c);
+                continue;
+            }
+
+            if (inString) {
+                // Handle control characters in strings
+                switch (c) {
+                    case '\n':
+                        result.append("\\n");
+                        break;
+                    case '\r':
+                        result.append("\\r");
+                        break;
+                    case '\t':
+                        result.append("\\t");
+                        break;
+                    case '\b':
+                        result.append("\\b");
+                        break;
+                    case '\f':
+                        result.append("\\f");
+                        break;
+                    default:
+                        // Normal character
+                        result.append(c);
+                }
+            } else {
+                // Not in a string, just append
+                result.append(c);
+            }
+        }
+
+        return result.toString();
     }
 }

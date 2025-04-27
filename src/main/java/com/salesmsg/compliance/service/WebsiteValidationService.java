@@ -93,17 +93,14 @@ public class WebsiteValidationService {
             // Create the user message with website content
             StringBuilder userMessageContent = new StringBuilder("Please analyze this website for 10DLC compliance:\n\n");
             userMessageContent.append("Website content (excerpt):\n");
+            userMessageContent.append(websiteContent);
 
-            // Include a reasonable excerpt of the content (first 2000 chars)
-            userMessageContent.append(websiteContent.substring(0, Math.min(websiteContent.length(), 2000)));
-            userMessageContent.append("\n...[content truncated]...\n\n");
 
             // Fetch webform content if applicable
             if (request.getCheckWebform() && request.getWebformUrl() != null) {
                 String webformContent = fetchWebsiteContent(request.getWebformUrl());
                 userMessageContent.append("Webform content (excerpt):\n");
-                userMessageContent.append(webformContent.substring(0, Math.min(webformContent.length(), 1000)));
-                userMessageContent.append("\n...[content truncated]...\n");
+                userMessageContent.append(webformContent);
             }
 
             // Create the prompt

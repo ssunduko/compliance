@@ -3,6 +3,7 @@ package com.salesmsg.compliance.controller;
 import com.salesmsg.compliance.dto.MessageGenerationDTO;
 import com.salesmsg.compliance.dto.UseCaseGenerationDTO;
 import com.salesmsg.compliance.service.ContentGenerationService;
+import com.salesmsg.compliance.util.RequestValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,11 +26,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class GenerationController {
 
     private final ContentGenerationService contentGenerationService;
+    private final RequestValidator requestValidator;
 
     @Operation(summary = "Generate compliant sample messages")
     @PostMapping("/sample-messages")
     public ResponseEntity<MessageGenerationDTO.Response> generateSampleMessages(
-            @Valid @RequestBody MessageGenerationDTO.Request request) {
+            @RequestBody MessageGenerationDTO.Request request) {
+
+        // Validate request and apply defaults
+        requestValidator.validateMessageGenerationRequest(request);
 
         log.info("Generating sample messages for use case: {}, count: {}",
                 request.getUseCase(), request.getMessageCount());
@@ -41,7 +46,10 @@ public class GenerationController {
     @Operation(summary = "Generate compliant use case description")
     @PostMapping("/use-case")
     public ResponseEntity<UseCaseGenerationDTO.Response> generateUseCase(
-            @Valid @RequestBody UseCaseGenerationDTO.Request request) {
+            @RequestBody UseCaseGenerationDTO.Request request) {
+
+        // Validate request and apply defaults
+        requestValidator.validateUseCaseGenerationRequest(request);
 
         log.info("Generating use case description for businessType: {}, messagingPurpose: {}",
                 request.getBusinessType(), request.getMessagingPurpose());
