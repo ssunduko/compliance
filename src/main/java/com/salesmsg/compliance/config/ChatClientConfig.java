@@ -4,6 +4,11 @@ package com.salesmsg.compliance.config;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.bedrock.converse.BedrockProxyChatModel;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.ai.model.function.DefaultFunctionCallbackResolver;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackResolver;
@@ -18,6 +23,7 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -75,6 +81,16 @@ public class ChatClientConfig {
 
     @Bean
     public ChatClient chatClient(BedrockProxyChatModel chatModel) {
-        return ChatClient.builder(chatModel).build();
+
+        ChatMemory chatMemory = new InMemoryChatMemory();
+        MessageChatMemoryAdvisor chatMemoryAdvisor = new MessageChatMemoryAdvisor(chatMemory);
+        PromptChatMemoryAdvisor promptMemoryAdvisor = new PromptChatMemoryAdvisor(chatMemory);
+        List<Advisor> advisorList = Arrays.asList(chatMemoryAdvisor, promptMemoryAdvisor);
+
+        return ChatClient.builder(chatModel)
+                .defaultAdvisors(advisorList)
+                .build();
+
     }
+
 }

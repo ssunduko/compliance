@@ -81,10 +81,7 @@ public class ImageAnalysisService {
         try {
             // Upload image to S3 to get a URL
             String imageKey = "temp/analysis/" + UUID.randomUUID() + getFileExtension(image.getOriginalFilename());
-            //TODO: Upload image
-            //String imageUrl = awsService.uploadFile(image, imageKey);
-
-            String imageUrl = "https://se498.s3.us-west-2.amazonaws.com/form.png";
+            String imageUrl = awsService.uploadFile(image, imageKey);
 
             // Format the system prompt with request parameters
             String systemPrompt = String.format(
@@ -112,8 +109,7 @@ public class ImageAnalysisService {
             String responseText = response.getResult().getOutput().getText();
 
             // Delete the temporary image from S3
-            //TODO: Delete Image
-            //awsService.deleteFile(imageKey);
+            awsService.deleteFile(imageKey);
 
             // Parse the JSON response
             Map<String, Object> analysisResult = parseJsonResponse(responseText);
@@ -218,7 +214,7 @@ public class ImageAnalysisService {
      * @return The file extension (with dot)
      */
     private String getFileExtension(String filename) {
-        if (filename == null || filename.isEmpty() || !filename.contains(".")) {
+        if (filename == null || !filename.contains(".")) {
             return ".jpg"; // Default extension
         }
         return filename.substring(filename.lastIndexOf("."));

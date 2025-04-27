@@ -148,6 +148,13 @@
 			<version>2.3.0</version>
 		</dependency>
 
+		<!-- https://mvnrepository.com/artifact/org.springframework.ai/spring-ai-gemfire-store -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-gemfire-store</artifactId>
+			<version>1.0.0-M7</version>
+		</dependency>
+
 		<!-- Testing -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

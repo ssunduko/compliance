@@ -41,6 +41,7 @@ public class AWSService {
     public String uploadFile(MultipartFile file, String key) {
 
         try {
+
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucketName)
                     .key(key)
@@ -116,7 +117,7 @@ public class AWSService {
      * @return The file extension (with dot)
      */
     private String getFileExtension(String filename) {
-        if (filename == null || filename.isEmpty() || !filename.contains(".")) {
+        if (filename == null || !filename.contains(".")) {
             return "";
         }
         return filename.substring(filename.lastIndexOf("."));
