@@ -168,43 +168,63 @@ public class ImageAnalysisService {
                 .build();
     }
 
-    /**
-     * Parse a JSON response from the AI model.
-     *
-     * @param responseText The response text
-     * @return The parsed JSON as a Map
-     */
     private Map<String, Object> parseJsonResponse(String responseText) {
         try {
-            // Extract JSON from response (in case there's additional text around it)
+            // Extract JSON from response text more carefully
             String jsonContent = extractJsonFromResponse(responseText);
+
+            if (jsonContent == null || jsonContent.isEmpty()) {
+                log.error("Failed to extract JSON from response: {}", responseText);
+                return Map.of(
+                        "hasRequiredElements", false,
+                        "detectedElements", List.of(),
+                        "missingElements", List.of("Unable to parse AI response"),
+                        "textQuality", "unknown",
+                        "complianceScore", 0.0f,
+                        "recommendations", List.of("Error parsing AI response")
+                );
+            }
 
             // Parse the JSON
             return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
-
         } catch (JsonProcessingException e) {
-            log.error("Error parsing AI response", e);
-            return Map.of();
+            log.error("Error parsing AI response: {}", e.getMessage());
+            log.debug("Original response: {}", responseText);
+            return Map.of(
+                    "hasRequiredElements", false,
+                    "detectedElements", List.of(),
+                    "missingElements", List.of("Unable to parse AI response"),
+                    "textQuality", "unknown",
+                    "complianceScore", 0.0f,
+                    "recommendations", List.of("Error parsing AI response: " + e.getMessage())
+            );
         }
     }
 
-    /**
-     * Extract JSON content from a text response that might contain additional text.
-     *
-     * @param response The response text that should contain a JSON object
-     * @return The extracted JSON string
-     */
     private String extractJsonFromResponse(String response) {
-        // Look for JSON pattern using regex
-        Pattern pattern = Pattern.compile("\\{[\\s\\S]*\\}");
+        if (response == null || response.isEmpty()) {
+            return null;
+        }
+
+        // More robust JSON extraction
+        // This uses a regex to find content between { and } that contains at least one ":"
+        // which indicates a JSON key-value pair
+        Pattern pattern = Pattern.compile("\\{(?:[^{}]|\"[^\"]*\")*:[^{}]*\\}");
         Matcher matcher = pattern.matcher(response);
 
         if (matcher.find()) {
             return matcher.group();
         }
 
-        // If no JSON found, return the original response
-        return response;
+        // If we can't find JSON with the regex, try a simpler approach
+        int startIdx = response.indexOf('{');
+        int endIdx = response.lastIndexOf('}');
+
+        if (startIdx >= 0 && endIdx > startIdx) {
+            return response.substring(startIdx, endIdx + 1);
+        }
+
+        return null;
     }
 
     /**

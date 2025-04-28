@@ -36,9 +36,6 @@ public class ImageAnalysisServiceTest {
     @Autowired
     private ImageAnalysisService imageAnalysisService;
 
-    @Autowired
-    private AWSService awsService;
-
     /**
      * Test analysis of a web form image.
      */
