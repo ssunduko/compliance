@@ -22,8 +22,9 @@ public class FirecrawlWebsiteValidationServiceTest {
     void checkWebsite_RealWebsite_Success() {
         // Arrange
         WebsiteCheckDTO request = WebsiteCheckDTO.builder()
-                .url("https://www.investopedia.com/terms/m/missionstatement.asp")
-                .checkWebform(false)
+                .url("https://adocuscto.com/")
+                .checkWebform(true)
+                .webformUrl("https://adocuscto.com/privacy-policy")
                 .build();
 
         // Act

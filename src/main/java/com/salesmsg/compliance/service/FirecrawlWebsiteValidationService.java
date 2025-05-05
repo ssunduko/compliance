@@ -4,26 +4,28 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.salesmsg.compliance.dto.*;
 import com.salesmsg.compliance.client.FirecrawlApiClient;
+import com.salesmsg.compliance.dto.FirecrawlExtractEndpointRequest;
+import com.salesmsg.compliance.dto.FirecrawlExtractEndpointResponse;
+import com.salesmsg.compliance.dto.WebsiteCheckDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static software.amazon.awssdk.regions.internal.util.EC2MetadataUtils.getData;
-
 /**
- * Alternative implementation of WebsiteValidationService using Firecrawl's extract endpoint.
- * Extracts specific compliance-related content from websites and analyzes it using AI.
+ * Implementation of WebsiteValidationService using Firecrawl's extract endpoint.
+ * Updated to handle job ID-based asynchronous extraction process.
  */
 @Service
 @RequiredArgsConstructor
@@ -139,6 +141,34 @@ public class FirecrawlWebsiteValidationService {
             }
             """;
 
+    private static final String DEFAULT_WEBSITE_ANALYSIS = """
+            {
+              "has_privacy_policy": false,
+              "privacy_policy_url": "",
+              "has_sms_data_sharing_clause": false,
+              "webform_functional": false,
+              "webform_has_required_elements": false,
+              "compliance_score": 25,
+              "issues": [
+                {
+                  "severity": "critical",
+                  "description": "Could not extract compliance data from website",
+                  "recommendation": "Manually verify the website has a privacy policy with SMS data usage clauses"
+                },
+                {
+                  "severity": "major",
+                  "description": "No SMS opt-in form detected",
+                  "recommendation": "Ensure website has a clear SMS opt-in mechanism with checkbox and consent text"
+                },
+                {
+                  "severity": "major",
+                  "description": "No message frequency disclosure found",
+                  "recommendation": "Add message frequency disclosure to website"
+                }
+              ]
+            }
+            """;
+
     /**
      * Check a website for SMS compliance requirements using Firecrawl extraction.
      *
@@ -157,8 +187,33 @@ public class FirecrawlWebsiteValidationService {
                 urls.add(request.getWebformUrl());
             }
 
+            // Add privacy policy URL if different from main URL
+            if (request.getUrl() != null && !request.getUrl().contains("privacy")) {
+                String privacyUrl = request.getUrl();
+                if (privacyUrl.endsWith("/")) {
+                    privacyUrl += "privacy-policy";
+                } else {
+                    privacyUrl += "/privacy-policy";
+                }
+                urls.add(privacyUrl);
+            }
+
             // Extract compliance-related content from all URLs using the extract endpoint
             FirecrawlExtractEndpointResponse extractedContent = extractContentFromWebsites(urls);
+
+            // Check for failures
+            if (!extractedContent.isSuccess()) {
+                log.error("Extraction failed: {}", extractedContent.getError());
+                return buildErrorResponse("Extraction failed: " +
+                        (extractedContent.getError() != null ? extractedContent.getError() : "Unknown error"));
+            }
+
+            // Check if we're missing data
+            if (extractedContent.getData() == null || extractedContent.getData().isEmpty()) {
+                log.warn("No data extracted from website. Using default analysis.");
+                Map<String, Object> defaultAnalysis = parseJsonResponse(DEFAULT_WEBSITE_ANALYSIS);
+                return buildWebsiteCheckDTO(defaultAnalysis, request);
+            }
 
             // Analyze the extracted content using AI
             Map<String, Object> analysisResult = analyzeExtractedContent(
@@ -186,27 +241,25 @@ public class FirecrawlWebsiteValidationService {
             // Parse the schema as JsonNode
             JsonNode schema = objectMapper.readTree(COMPLIANCE_EXTRACTION_SCHEMA);
 
+
             // Prepare the Firecrawl extract request
-            //TODO: Refactor
-            /*FirecrawlExtractEndpointRequest extractRequest = FirecrawlExtractEndpointRequest.builder()
+            FirecrawlExtractEndpointRequest extractRequest = FirecrawlExtractEndpointRequest.builder()
                     .urls(urls)
                     .prompt(EXTRACTION_PROMPT)
                     .schema(schema)
-                    .build();*/
-
-            FirecrawlExtractEndpointRequest extractRequest = FirecrawlExtractEndpointRequest.builder()
-                    .urls(urls)
-                    .prompt("Extract the company mission and features from these pages.")
-                    //.schema(schema)
                     .build();
 
+            // Make the API call to Firecrawl and get the potentially async response
             FirecrawlExtractEndpointResponse response = firecrawlApiClient.extractFromUrls(extractRequest);
 
-            Map<String, Object> map = response.getData();
-            map.forEach((k, v) -> System.out.printf("%-15s : %s%n", k, v));
+            // Log the response for debugging
+            try {
+                log.debug("Response from Firecrawl: {}", objectMapper.writeValueAsString(response));
+            } catch (Exception e) {
+                log.warn("Failed to serialize response for logging", e);
+            }
 
-            // Make the API call to Firecrawl
-            return firecrawlApiClient.extractFromUrls(extractRequest);
+            return response;
 
         } catch (Exception e) {
             log.error("Error extracting content from websites", e);
@@ -226,12 +279,51 @@ public class FirecrawlWebsiteValidationService {
             FirecrawlExtractEndpointResponse extractedContent) {
 
         try {
-            // Get the extracted data
+            // Extract the data from the response
             Map<String, Object> combinedContent = new HashMap<>();
 
-            if (extractedContent != null && extractedContent.isSuccess() &&
-                    extractedContent.getData() != null) {
-                combinedContent = extractedContent.getData();
+            if (extractedContent.getData() != null && !extractedContent.getData().isEmpty()) {
+                // Process each URL's extracted data
+                for (FirecrawlExtractEndpointResponse.ExtractedData data : extractedContent.getData()) {
+                    if (data.getUrl() != null && data.getExtract() != null) {
+                        // If this is the main URL, add data directly to combined content
+                        if (url.equals(data.getUrl())) {
+                            if (data.getExtract() instanceof Map) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> extractMap = (Map<String, Object>) data.getExtract();
+                                combinedContent.putAll(extractMap);
+                            } else {
+                                combinedContent.put("mainUrlData", data.getExtract());
+                            }
+                        } else if (data.getUrl().contains("privacy")) {
+                            // For privacy policy URL
+                            combinedContent.put("privacyPolicyData", data.getExtract());
+                        } else {
+                            // For other URLs (like webform URL)
+                            combinedContent.put("webformData", data.getExtract());
+                        }
+                    }
+
+                    // Add metadata under a specific key if available
+                    if (data.getMetadata() != null) {
+                        Map<String, Object> metadataMap = objectMapper.convertValue(
+                                data.getMetadata(), new TypeReference<Map<String, Object>>() {});
+
+                        if (url.equals(data.getUrl())) {
+                            combinedContent.put("mainUrlMetadata", metadataMap);
+                        } else if (data.getUrl().contains("privacy")) {
+                            combinedContent.put("privacyPolicyMetadata", metadataMap);
+                        } else {
+                            combinedContent.put("webformMetadata", metadataMap);
+                        }
+                    }
+                }
+            }
+
+            // If no data was extracted, create a minimal map
+            if (combinedContent.isEmpty()) {
+                log.warn("No data extracted from URL: {}", url);
+                combinedContent.put("error", "No data could be extracted from the website");
             }
 
             // Format the system prompt with extracted content
