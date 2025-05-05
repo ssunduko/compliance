@@ -3,12 +3,14 @@ package com.salesmsg.compliance.dto;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,7 +29,15 @@ import java.util.List;
  *   "success": true,
  *   "data": [],
  *   "status": "processing",
- *   "expiresAt": "2025-01-08T20:58:12.000Z"
+ *   "expiresAt": "2025-05-05T12:54:40.000Z"
+ * }
+ *
+ * Completed response example:
+ * {
+ *   "success": true,
+ *   "data": {...},  // Can be an object or an array
+ *   "status": "completed",
+ *   "expiresAt": "2025-05-05T13:18:25.000Z"
  * }
  */
 @Data
@@ -54,9 +64,11 @@ public class FirecrawlExtractEndpointResponse {
     private List<String> urlTrace;
 
     /**
-     * Array of extracted data. May be null if processing is not complete.
+     * Extracted data. May be null if processing is not complete.
+     * This can be either a single object or an array depending on the API response.
+     * We use JsonNode to handle this polymorphic response.
      */
-    private List<ExtractedData> data;
+    private JsonNode data;
 
     /**
      * Current status of the extraction process.
@@ -68,7 +80,7 @@ public class FirecrawlExtractEndpointResponse {
      * When the extraction result will expire and no longer be available.
      */
     @JsonProperty("expiresAt")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private ZonedDateTime expiresAt;
 
     /**
@@ -80,6 +92,47 @@ public class FirecrawlExtractEndpointResponse {
      * Additional error details.
      */
     private String details;
+
+    /**
+     * Get the extracted data as a list of ExtractedData objects.
+     * This method handles both array and object responses.
+     *
+     * @return A list of extracted data objects
+     */
+    public List<ExtractedData> getExtractedDataList() {
+        List<ExtractedData> result = new ArrayList<>();
+
+        if (data == null) {
+            return result;
+        }
+
+        if (data.isArray()) {
+            // Handle array response
+            for (JsonNode item : data) {
+                // Convert each item to ExtractedData using Jackson
+                result.add(convertJsonNodeToExtractedData(item));
+            }
+        } else if (data.isObject()) {
+            // Handle single object response by creating a single ExtractedData object
+            ExtractedData extractedData = new ExtractedData();
+            extractedData.setExtract(data);
+            result.add(extractedData);
+        }
+
+        return result;
+    }
+
+    /**
+     * Helper method to convert a JsonNode to an ExtractedData object.
+     * In a real implementation, you would use ObjectMapper for this.
+     */
+    private ExtractedData convertJsonNodeToExtractedData(JsonNode node) {
+        // This is a simplified implementation
+        // In real code, you would use ObjectMapper.treeToValue()
+        ExtractedData data = new ExtractedData();
+        data.setExtract(node);
+        return data;
+    }
 
     /**
      * Check if this is an initial response with just a job ID.

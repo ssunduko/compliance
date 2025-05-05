@@ -283,38 +283,55 @@ public class FirecrawlWebsiteValidationService {
             Map<String, Object> combinedContent = new HashMap<>();
 
             if (extractedContent.getData() != null && !extractedContent.getData().isEmpty()) {
-                // Process each URL's extracted data
-                for (FirecrawlExtractEndpointResponse.ExtractedData data : extractedContent.getData()) {
-                    if (data.getUrl() != null && data.getExtract() != null) {
-                        // If this is the main URL, add data directly to combined content
-                        if (url.equals(data.getUrl())) {
-                            if (data.getExtract() instanceof Map) {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> extractMap = (Map<String, Object>) data.getExtract();
-                                combinedContent.putAll(extractMap);
-                            } else {
-                                combinedContent.put("mainUrlData", data.getExtract());
-                            }
-                        } else if (data.getUrl().contains("privacy")) {
-                            // For privacy policy URL
-                            combinedContent.put("privacyPolicyData", data.getExtract());
-                        } else {
-                            // For other URLs (like webform URL)
-                            combinedContent.put("webformData", data.getExtract());
-                        }
+                // The data is now a JsonNode, and it's not empty
+                JsonNode dataNode = extractedContent.getData();
+
+                // If data is a direct object (not an array)
+                if (dataNode.isObject()) {
+                    // Process the object directly as the main data
+                    try {
+                        // Convert JsonNode to Map
+                        Map<String, Object> extractMap = objectMapper.convertValue(
+                                dataNode, new TypeReference<Map<String, Object>>() {});
+                        combinedContent.putAll(extractMap);
+                    } catch (Exception e) {
+                        log.warn("Error converting data to map: {}", e.getMessage());
+                        combinedContent.put("mainUrlData", dataNode);
                     }
+                } else {
+                    // Process data as a list through our helper method
+                    for (FirecrawlExtractEndpointResponse.ExtractedData data : extractedContent.getExtractedDataList()) {
+                        if (data.getUrl() != null && data.getExtract() != null) {
+                            // If this is the main URL, add data directly to combined content
+                            if (url.equals(data.getUrl())) {
+                                if (data.getExtract() instanceof Map) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> extractMap = (Map<String, Object>) data.getExtract();
+                                    combinedContent.putAll(extractMap);
+                                } else {
+                                    combinedContent.put("mainUrlData", data.getExtract());
+                                }
+                            } else if (data.getUrl() != null && data.getUrl().contains("privacy")) {
+                                // For privacy policy URL
+                                combinedContent.put("privacyPolicyData", data.getExtract());
+                            } else {
+                                // For other URLs (like webform URL)
+                                combinedContent.put("webformData", data.getExtract());
+                            }
+                        }
 
-                    // Add metadata under a specific key if available
-                    if (data.getMetadata() != null) {
-                        Map<String, Object> metadataMap = objectMapper.convertValue(
-                                data.getMetadata(), new TypeReference<Map<String, Object>>() {});
+                        // Add metadata under a specific key if available
+                        if (data.getMetadata() != null) {
+                            Map<String, Object> metadataMap = objectMapper.convertValue(
+                                    data.getMetadata(), new TypeReference<Map<String, Object>>() {});
 
-                        if (url.equals(data.getUrl())) {
-                            combinedContent.put("mainUrlMetadata", metadataMap);
-                        } else if (data.getUrl().contains("privacy")) {
-                            combinedContent.put("privacyPolicyMetadata", metadataMap);
-                        } else {
-                            combinedContent.put("webformMetadata", metadataMap);
+                            if (url.equals(data.getUrl())) {
+                                combinedContent.put("mainUrlMetadata", metadataMap);
+                            } else if (data.getUrl() != null && data.getUrl().contains("privacy")) {
+                                combinedContent.put("privacyPolicyMetadata", metadataMap);
+                            } else {
+                                combinedContent.put("webformMetadata", metadataMap);
+                            }
                         }
                     }
                 }

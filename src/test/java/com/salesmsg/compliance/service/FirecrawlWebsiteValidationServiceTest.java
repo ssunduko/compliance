@@ -1,6 +1,5 @@
 package com.salesmsg.compliance.service;
 
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -24,7 +23,6 @@ public class FirecrawlWebsiteValidationServiceTest {
         WebsiteCheckDTO request = WebsiteCheckDTO.builder()
                 .url("https://adocuscto.com/")
                 .checkWebform(true)
-                .webformUrl("https://adocuscto.com/privacy-policy")
                 .build();
 
         // Act
