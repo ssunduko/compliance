@@ -45,9 +45,9 @@ public class ChatClientConfig {
     private String modelId;
 
     @Value("${anthropic.temperature:0.7}")
-    private Float temperature;
+    private Double temperature;
 
-    @Value("${anthropic.max-tokens:1000}")
+    @Value("${anthropic.max-tokens:8192}")
     private Integer maxTokens;
 
     @Autowired
@@ -66,8 +66,8 @@ public class ChatClientConfig {
 
         FunctionCallingOptions defaultOptions = FunctionCallingOptions.builder()
                 .model(modelId)
-                .temperature(0.7)
-                .maxTokens(1000)
+                .temperature(temperature)
+                .maxTokens(maxTokens)
                 .build();
 
         FunctionCallbackResolver functionCallbackResolver = new DefaultFunctionCallbackResolver();
@@ -92,7 +92,7 @@ public class ChatClientConfig {
         MessageChatMemoryAdvisor chatMemoryAdvisor = new MessageChatMemoryAdvisor(chatMemory);
         PromptChatMemoryAdvisor promptMemoryAdvisor = new PromptChatMemoryAdvisor(chatMemory);
         QuestionAnswerAdvisor questionAnswerAdvisor = new QuestionAnswerAdvisor(vectorStore);
-        List<Advisor> advisorList = Arrays.asList(chatMemoryAdvisor, promptMemoryAdvisor, questionAnswerAdvisor);
+        List<Advisor> advisorList = Arrays.asList();
 
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(advisorList)

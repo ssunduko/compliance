@@ -68,7 +68,7 @@ public class SwaggerConfig {
                 .description("Local Development Server");
 
         Server devServer = new Server()
-                .url("https://compliance-api-dev.salesmsg.com")
+                .url("https://fad9-2600-8802-1b00-3-7c05-91ac-d1dc-695.ngrok-free.app")
                 .description("Development Server");
 
         Server stagingServer = new Server()
