@@ -12,6 +12,7 @@ import software.amazon.awssdk.services.bedrock.model.ListFoundationModelsRequest
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.kendra.KendraClient;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.textract.TextractClient;
 
 /**
  * Configuration for AWS services used in the application.
@@ -102,5 +103,13 @@ public class AWSConfig {
     @Bean
     public String kendraIndexId() {
         return kendraIndexId;
+    }
+
+    @Bean
+    public TextractClient textractClient() {
+        return TextractClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider())
+                .build();
     }
 }
