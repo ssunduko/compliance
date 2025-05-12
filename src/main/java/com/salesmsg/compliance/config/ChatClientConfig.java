@@ -93,7 +93,7 @@ public class ChatClientConfig {
         MessageChatMemoryAdvisor chatMemoryAdvisor = new MessageChatMemoryAdvisor(chatMemory);
         PromptChatMemoryAdvisor promptMemoryAdvisor = new PromptChatMemoryAdvisor(chatMemory);
         QuestionAnswerAdvisor questionAnswerAdvisor = new QuestionAnswerAdvisor(vectorStore);
-        List<Advisor> advisorList = Arrays.asList();
+        List<Advisor> advisorList = List.of();
 
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(advisorList)

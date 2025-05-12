@@ -7,6 +7,7 @@ import com.salesmsg.compliance.dto.WebsiteCheckDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 public class WebsiteValidationService {
 
     private final ChatClient chatClient;
+    private final RetrievalAugmentationAdvisor retrievalAugmentationAdvisor;
     private final ObjectMapper objectMapper;
 
     private static final String WEBSITE_VALIDATION_PROMPT = """
@@ -112,6 +114,7 @@ public class WebsiteValidationService {
             // Execute the chat completion
             ChatResponse response = chatClient
                     .prompt(prompt)
+                    //.advisors(retrievalAugmentationAdvisor)
                     .call()
                     .chatResponse();
 

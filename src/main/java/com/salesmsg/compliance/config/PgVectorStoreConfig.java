@@ -30,7 +30,7 @@ public class PgVectorStoreConfig {
     @Value("${spring.ai.vectorstore.pgvector.distance-type:COSINE_DISTANCE}")
     private String distanceType;
 
-    @Value("${spring.ai.document.chunk-size:1536}")
+    @Value("${spring.ai.document.chunk-size:1024}")
     private int chunkSize;
 
     @Value("${spring.ai.document.chunk-overlap:128}")
@@ -43,7 +43,6 @@ public class PgVectorStoreConfig {
 
         return PgVectorStore.builder(jdbcTemplate, embeddingModel)
                 .vectorTableName("compliance_embeddings")
-                .dimensions(chunkSize)
                 .distanceType(PgVectorStore.PgDistanceType.valueOf(distanceType))
                 .indexType(PgVectorStore.PgIndexType.valueOf(indexType))
                 .removeExistingVectorStoreTable(true)
