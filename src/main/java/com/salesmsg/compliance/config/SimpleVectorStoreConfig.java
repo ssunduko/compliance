@@ -1,6 +1,5 @@
 package com.salesmsg.compliance.config;
 
-
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
@@ -24,6 +23,7 @@ public class SimpleVectorStoreConfig {
         TikaDocumentReader reader = new TikaDocumentReader(new FileSystemResource(resourcePath) );
         TokenTextSplitter splitter = new TokenTextSplitter();
         vectorStore.add(splitter.apply(reader.get()));
+
         return vectorStore;
     }
 }

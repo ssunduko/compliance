@@ -21,8 +21,9 @@ public class FirecrawlWebsiteValidationServiceTest {
     void checkWebsite_RealWebsite_Success() {
         // Arrange
         WebsiteCheckDTO request = WebsiteCheckDTO.builder()
-                .url("https://adocuscto.com/")
+                .url("https://ffcd7b8e.salesmsg-demo.pages.dev/privacy_policy")
                 .checkWebform(true)
+                .webformUrl("https://ffcd7b8e.salesmsg-demo.pages.dev/contact_form")
                 .build();
 
         // Act

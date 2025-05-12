@@ -26,9 +26,9 @@ public class WebsiteValidationServiceTest {
     void testCheckCompliantWebsite() {
         // Create a request with a URL that should have all required elements
         WebsiteCheckDTO request = WebsiteCheckDTO.builder()
-                .url("https://adocuscto.com/")
+                .url("https://ffcd7b8e.salesmsg-demo.pages.dev/contact_form")
                 .checkWebform(true)
-                .webformUrl("https://adocuscto.com/privacy-policy")
+                .webformUrl("https://ffcd7b8e.salesmsg-demo.pages.dev/privacy_policy")
                 .build();
 
         // Execute

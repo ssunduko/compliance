@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.function.DefaultFunctionCallbackResolver;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackResolver;
@@ -41,13 +42,13 @@ public class ChatClientConfig {
     @Value("${aws.secret-key}")
     private String secretKey;
 
-    @Value("${anthropic.model-id:anthropic.claude-3-5-sonnet-20240620-v1:0}")
+    @Value("${ai.model.bedrock.claude:us.anthropic.claude-3-7-sonnet-20250219-v1:0}")
     private String modelId;
 
-    @Value("${anthropic.temperature:0.7}")
+    @Value("${ai.model.temperature:0.3}")
     private Double temperature;
 
-    @Value("${anthropic.max-tokens:8192}")
+    @Value("${ai.model.max-tokens:20000}")
     private Integer maxTokens;
 
     @Autowired
@@ -86,7 +87,7 @@ public class ChatClientConfig {
     }
 
     @Bean
-    public ChatClient chatClient(BedrockProxyChatModel chatModel) {
+    public ChatClient chatClient(ChatModel chatModel) {
 
         ChatMemory chatMemory = new InMemoryChatMemory();
         MessageChatMemoryAdvisor chatMemoryAdvisor = new MessageChatMemoryAdvisor(chatMemory);
