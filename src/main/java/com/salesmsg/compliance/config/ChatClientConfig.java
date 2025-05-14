@@ -1,22 +1,9 @@
 package com.salesmsg.compliance.config;
 
-
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.bedrock.converse.BedrockProxyChatModel;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.InMemoryChatMemory;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.model.function.DefaultFunctionCallbackResolver;
-import org.springframework.ai.model.function.FunctionCallback;
-import org.springframework.ai.model.function.FunctionCallbackResolver;
-import org.springframework.ai.model.function.FunctionCallingOptions;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,10 +12,6 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 public class ChatClientConfig {
@@ -51,12 +34,9 @@ public class ChatClientConfig {
     @Value("${ai.model.max-tokens:20000}")
     private Integer maxTokens;
 
-    @Autowired
-    private VectorStore vectorStore;
-
     @Bean
-    public BedrockProxyChatModel bedrockConverseProxyChatModel(BedrockRuntimeClient bedrockRuntimeClient) {
-        BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient = BedrockRuntimeAsyncClient.builder()
+    public BedrockRuntimeClient bedrockRuntimeClient() {
+        return BedrockRuntimeClient.builder()
                 .region(Region.of(awsRegion))
                 .credentialsProvider(
                         StaticCredentialsProvider.create(
@@ -64,40 +44,50 @@ public class ChatClientConfig {
                         )
                 )
                 .build();
+    }
 
-        FunctionCallingOptions defaultOptions = FunctionCallingOptions.builder()
+    @Bean
+    public BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient() {
+        return BedrockRuntimeAsyncClient.builder()
+                .region(Region.of(awsRegion))
+                .credentialsProvider(
+                        StaticCredentialsProvider.create(
+                                AwsBasicCredentials.create(accessKey, secretKey)
+                        )
+                )
+                .build();
+    }
+
+    @Bean
+    public ToolCallingChatOptions toolCallingChatOptions() {
+        return ToolCallingChatOptions.builder()
                 .model(modelId)
                 .temperature(temperature)
                 .maxTokens(maxTokens)
                 .build();
+    }
 
-        FunctionCallbackResolver functionCallbackResolver = new DefaultFunctionCallbackResolver();
+    @Bean
+    public ToolCallingManager toolCallingManager() {
+        return ToolCallingManager.builder()
+                .build();
+    }
 
-        List<FunctionCallback> toolFunctionCallbacks = new ArrayList<>();
+    @Bean
+    public BedrockProxyChatModel bedrockConverseProxyChatModel(
+            BedrockRuntimeClient bedrockRuntimeClient,
+            BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient,
+            ToolCallingChatOptions toolCallingChatOptions,
+            ToolCallingManager toolCallingManager) {
+
         ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
 
         return new BedrockProxyChatModel(
                 bedrockRuntimeClient,
                 bedrockRuntimeAsyncClient,
-                defaultOptions,
-                functionCallbackResolver,
-                toolFunctionCallbacks,
-                observationRegistry
+                toolCallingChatOptions,
+                observationRegistry,
+                toolCallingManager
         );
-    }
-
-    @Bean
-    public ChatClient chatClient(ChatModel chatModel) {
-
-        ChatMemory chatMemory = new InMemoryChatMemory();
-        MessageChatMemoryAdvisor chatMemoryAdvisor = new MessageChatMemoryAdvisor(chatMemory);
-        PromptChatMemoryAdvisor promptMemoryAdvisor = new PromptChatMemoryAdvisor(chatMemory);
-        QuestionAnswerAdvisor questionAnswerAdvisor = new QuestionAnswerAdvisor(vectorStore);
-        List<Advisor> advisorList = List.of();
-
-        return ChatClient.builder(chatModel)
-                .defaultAdvisors(advisorList)
-                .build();
-
     }
 }

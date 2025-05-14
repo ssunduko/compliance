@@ -18,7 +18,7 @@
 		<spring-cloud.version>2023.0.0</spring-cloud.version>
 		<langchain4j.version>1.0.0-beta3</langchain4j.version>
 		<langgraph4j.version>1.5.6</langgraph4j.version>
-		<aws.sdk.version>2.31.24</aws.sdk.version>
+		<aws.sdk.version>2.31.40</aws.sdk.version>
 		<twilio.version>9.8.0</twilio.version>
 	</properties>
 	<dependencies>
@@ -84,12 +84,12 @@
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-pdf-document-reader</artifactId>
-			<version>1.0.0-M6</version>
+			<version>1.0.0-M8</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-tika-document-reader</artifactId>
-			<version>1.0.0-M7</version>
+			<version>1.0.0-M8</version>
 		</dependency>
 
 		<!-- PostgreSQL dependency -->
